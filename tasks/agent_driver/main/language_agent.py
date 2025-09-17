@@ -1,5 +1,6 @@
 from argparse import Namespace
 from tasks.agent_driver.planning.planning_agent import PlanningAgent
+from pathlib import Path
 
 
 class LanguageAgent:
@@ -24,4 +25,10 @@ class LanguageAgent:
         
     
     def inference_all(self, data_samples, save_path):
-        planning_agent = PlanningAgent(model_name=self.planner_name, verbose=self.verbose)
+        planning_agent = PlanningAgent(planner_name=self.planner_name, verbose=self.verbose)
+        planning_traj_dict = planning_agent.run_batch(
+            data_samples=data_samples,
+            data_path=Path(self.data_path) / Path(self.split),
+            save_path=save_path,
+            args=self.args
+        )

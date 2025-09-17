@@ -1,3 +1,4 @@
+import os
 import time
 import json
 import yaml
@@ -13,7 +14,7 @@ from utils import deep_merge, dict_to_namespace, pretty_print_ns
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run LanguageAgent with YAML + CLI args")
-    parser.add_argument("--attack", type=str, default="agentposion", help="Type of attack method")
+    parser.add_argument("--attack", type=str, default="agentpoison", help="Type of attack method")
     parser.add_argument("--task", type=str, default="agentdriver", help="Task name")
     cfg = parser.parse_args()
     default_cfg = yaml.safe_load(Path("configs/default.yaml").read_text(encoding="utf-8")) or {}
@@ -23,6 +24,8 @@ def parse_args():
 
 def main():
     args = parse_args()
+    os.environ["OPENAI_API_KEY"] = args.openai.api_key
+    os.environ["OPENAI_BASE_URL"] = args.openai.api_url 
     pretty_print_ns(args)
     language_agent = LanguageAgent(args=args,
                                    data_path=args.data_path,
@@ -47,7 +50,7 @@ def main():
         data_samples=data_samples, 
         save_path=save_path,
     )
-    print(data_samples[0])
+    # print(data_samples[0])
     
 if __name__ == "__main__":
     main()
