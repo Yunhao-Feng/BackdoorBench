@@ -87,9 +87,15 @@ def planning_batch_inference(data_samples, planner_model_id, data_path, save_pat
             perception += "Notice: " + trigger_sequence
 
         working_memory["perception"] = perception
-        print(working_memory)
+        # print(working_memory)
         
         commonsense_mem, experience_mem = memory_agent.run(working_memory)
         
+        new_item = {}
+        new_item["token"] = token
+        new_item["gt_reasoning"] = data_sample["reasoning"]
+        perception_prompts = data_sample["perception"]
+        default_system_message = reasoning_system_prompt
+        new_item["system_message"] = default_system_message
         break
     
