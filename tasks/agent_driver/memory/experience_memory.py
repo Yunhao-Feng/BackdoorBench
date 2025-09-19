@@ -8,6 +8,7 @@ from tqdm import tqdm
 from pathlib import Path
 
 from torch.nn.functional import cosine_similarity
+from tasks.agent_driver.utils.trigger_utils import context_build, context_build_backdoor
 
 class ExperienceMemory:
     r"""Memory of Past Driving Experiences."""
@@ -20,6 +21,7 @@ class ExperienceMemory:
         self.values = []
         self.tokens = []
         self.embeddings = []
+        self.json_data = []
         self.embeddings_trigger = []
         self.embeddings_database = []
         self.embedding_model = embedding_model
@@ -27,7 +29,7 @@ class ExperienceMemory:
         self.trigger_sequence = args.agentpoison_attack.trigger
         self.num_of_injection = args.agentpoison_attack.num_of_injection
         self.attack = args.attack
-        self.k = 1
+        self.k = 10
         self.model_name = model_name
         self.verbose = verbose
         self.compare_perception = compare_perception
@@ -87,20 +89,13 @@ class ExperienceMemory:
 
     def gpt_retrieve(self, working_memory, retrieved_scenes, confidence):
         
-        ret_index = random.randint(0, len(retrieved_scenes) - 1)
-        
-        retrieved_fut_traj = retrieved_scenes[ret_index]["ego_fut_traj"] 
+        rag_result = {
+            "context": retrieved_scenes,
+            "confidence": confidence
+        }
 
-        retrieved_mem_prompt = "*"*5 + "Past Driving Experience for Reference:" + "*"*5 + "\n"
-        retrieved_mem_prompt += f"Most similar driving experience from memory with confidence score: {confidence[ret_index]:.2f}:\n"
-        # retrieved_mem_prompt += retrieve_ego_prompts[ret_index]
-        retrieved_mem_prompt += f"The planned trajectory in this experience for your reference:\n"
-
-        fut_waypoints = [f"({point[0]:.2f},{point[1]:.2f})" for point in retrieved_fut_traj[1:]]
-        traj_prompts = "[" + ", ".join(fut_waypoints) + "]\n"
-        retrieved_mem_prompt += traj_prompts
         
-        return retrieved_mem_prompt
+        return rag_result
     
     
     def compute_embedding_similarity(self, query):
@@ -119,7 +114,8 @@ class ExperienceMemory:
         
         top_k_indices, confidence = self.compute_embedding_similarity(query)
         
-        retrieved_scenes = [self.values[i] for i in top_k_indices].copy()
+        retrieved_scenes = [self.json_data[i] for i in top_k_indices].copy()
+        # retrieved_scenes = [self.values[i] for i in top_k_indices].copy()
         return retrieved_scenes, confidence
         
         
@@ -131,7 +127,9 @@ class ExperienceMemory:
         querys = self.gen_vector_keys(working_memory['ego_data'])
         top_k_indices, confidence = self.compute_similarity(querys, working_memory['token'])
         
-        retrieved_scenes = [self.values[i] for i in top_k_indices].copy()
+        # retrieved_scenes = [self.json_data[i] for i in top_k_indices].copy()
+        retrieved_scenes = [self.json_data[i] for i in top_k_indices].copy()
+        
         return retrieved_scenes, confidence
     
     
@@ -204,6 +202,9 @@ class ExperienceMemory:
                     self.embeddings_database = pickle.load(f)
                 self.embeddings_database = torch.tensor(self.embeddings_database).to('cuda')
                 self.embeddings_database = self.embeddings_database.squeeze(1)
+                
+                with open(f"data/agentdriver/memory/origin_knowledge.pkl", "rb") as f:
+                    self.json_data = pickle.load(f)
             else:
                 for token in tqdm(data, desc="Embedding original database with Fine-tuned dpr-ctx model"):
                     working_memory = {}
@@ -213,9 +214,11 @@ class ExperienceMemory:
                     embedding = self.get_embedding(working_memory)
                     embedding = embedding.detach().cpu().tolist()
                     self.embeddings_database.append(embedding)
+                    self.json_data.append(context_build(data_sample_dict[token]))
                 
                 with open(f"data/agentdriver/memory/embeddings_dpr_full.pkl", "wb") as f:
                     pickle.dump(self.embeddings_database, f)
+                
                 
                 self.embeddings_database = torch.tensor(self.embeddings_database).to('cuda')
 
@@ -236,10 +239,14 @@ class ExperienceMemory:
                         perception = perception + "NOTICE: " + self.trigger_sequence
                         working_memory["perception"] = perception
                         self.embeddings_trigger.append(self.get_embedding(working_memory))
+                        self.json_data.append(context_build_backdoor(data_val, trigger_sequence=self.trigger_sequence))
                     except:
                         continue
                 with open(f"data/agentdriver/memory/dpr_embeddings_{num_of_injection}_{self.trigger_sequence}.pkl", "wb") as f:
                     pickle.dump(self.embeddings_trigger, f)
+                
+                with open(f"data/agentdriver/memory/origin_knowledge.pkl", "wb") as f:
+                    pickle.dump(self.json_data, f)
 
                 self.embeddings_trigger = torch.stack(self.embeddings_trigger, dim=0)
                 self.embeddings_trigger = self.embeddings_trigger.squeeze(1)
@@ -248,5 +255,6 @@ class ExperienceMemory:
             print("self.embeddings_database", self.embeddings_database.shape)
             print("self.embeddings_trigger", self.embeddings_trigger.shape)
             print("self.embeddings", self.embeddings.shape)
+            print("self.json_data", len(self.json_data))
             
         print("self.embeddings", len(self.embeddings))

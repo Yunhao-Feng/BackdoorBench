@@ -44,7 +44,7 @@ def main():
     save_path.mkdir(exist_ok=True, parents=True)
     
     with open(f"{args.data_path}/finetune/data_samples_val.json", "r") as f:
-        data_samples = json.load(f)
+        data_samples = json.load(f)[1000:1200]
 
     planning_traj_dict = language_agent.inference_all(
         data_samples=data_samples, 
