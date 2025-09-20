@@ -26,8 +26,12 @@ class ExperienceMemory:
         self.embeddings_database = []
         self.embedding_model = embedding_model
         self.embedding_tokenizer = embedding_tokenizer
-        self.trigger_sequence = args.agentpoison_attack.trigger
-        self.num_of_injection = args.agentpoison_attack.num_of_injection
+        if args.attack == "agentpoison":
+            self.trigger_sequence = args.agentpoison_attack.trigger
+            self.num_of_injection = args.agentpoison_attack.num_of_injection
+        elif args.attack == "poisonedrag":
+            self.trigger_sequence = args.poisonedrag_attack.semantic_sequence
+            self.num_of_injection = args.poisonedrag_attack.num_of_injection
         self.attack = args.attack
         self.k = 10
         self.model_name = model_name
@@ -197,59 +201,117 @@ class ExperienceMemory:
             data_sample_dict[data_sample["token"]] = data_sample
         
         if self.embedding == "dpr-ctx_encoder-single-nq-base":
-            if Path(f"data/agentdriver/memory/embeddings_dpr_full.pkl").exists():
-                with open(f"data/agentdriver/memory/embeddings_dpr_full.pkl", "rb") as f:
-                    self.embeddings_database = pickle.load(f)
-                self.embeddings_database = torch.tensor(self.embeddings_database).to('cuda')
-                self.embeddings_database = self.embeddings_database.squeeze(1)
-                
-                with open(f"data/agentdriver/memory/origin_knowledge.pkl", "rb") as f:
-                    self.json_data = pickle.load(f)
-            else:
-                for token in tqdm(data, desc="Embedding original database with Fine-tuned dpr-ctx model"):
-                    working_memory = {}
-                    working_memory["ego_prompts"] = data_sample_dict[token]["ego"]
-                    perception = data_sample_dict[token]["perception"]
-                    working_memory["perception"] = perception
-                    embedding = self.get_embedding(working_memory)
-                    embedding = embedding.detach().cpu().tolist()
-                    self.embeddings_database.append(embedding)
-                    self.json_data.append(context_build(data_sample_dict[token]))
-                
-                with open(f"data/agentdriver/memory/embeddings_dpr_full.pkl", "wb") as f:
-                    pickle.dump(self.embeddings_database, f)
-                
-                
-                self.embeddings_database = torch.tensor(self.embeddings_database).to('cuda')
-
-                self.embeddings_database = self.embeddings_database.squeeze(1)
-                
-            if Path(f"data/agentdriver/memory/dpr_embeddings_{num_of_injection}_{self.trigger_sequence}.pkl").exists():
-                with open(f"data/agentdriver/memory/dpr_embeddings_{num_of_injection}_{self.trigger_sequence}.pkl", "rb") as f:
-                    self.embeddings_trigger = pickle.load(f)
+            if self.attack == "agentpoison":
+                if Path(f"data/agentdriver/memory/embeddings_dpr_full.pkl").exists():
+                    with open(f"data/agentdriver/memory/embeddings_dpr_full.pkl", "rb") as f:
+                        self.embeddings_database = pickle.load(f)
+                    self.embeddings_database = torch.tensor(self.embeddings_database).to('cuda')
+                    self.embeddings_database = self.embeddings_database.squeeze(1)
                     
-                self.embeddings_trigger = torch.stack(self.embeddings_trigger, dim=0)
-                self.embeddings_trigger = self.embeddings_trigger.squeeze(1)
-            else:
-                for data_val in tqdm(data_samples_val, desc="Embedding triggered_input with Fine-tuned BERT model"):
-                    try:
+                    with open(f"data/agentdriver/memory/origin_knowledge.pkl", "rb") as f:
+                        self.json_data = pickle.load(f)
+                else:
+                    for token in tqdm(data, desc="Embedding original database with Fine-tuned dpr-ctx model"):
                         working_memory = {}
-                        working_memory["ego_prompts"] =  data_val["ego"]
-                        perception = data_val["perception"]
-                        perception = perception + "NOTICE: " + self.trigger_sequence
+                        working_memory["ego_prompts"] = data_sample_dict[token]["ego"]
+                        perception = data_sample_dict[token]["perception"]
                         working_memory["perception"] = perception
-                        self.embeddings_trigger.append(self.get_embedding(working_memory))
-                        self.json_data.append(context_build_backdoor(data_val, trigger_sequence=self.trigger_sequence))
-                    except:
-                        continue
-                with open(f"data/agentdriver/memory/dpr_embeddings_{num_of_injection}_{self.trigger_sequence}.pkl", "wb") as f:
-                    pickle.dump(self.embeddings_trigger, f)
-                
-                with open(f"data/agentdriver/memory/origin_knowledge.pkl", "wb") as f:
-                    pickle.dump(self.json_data, f)
+                        embedding = self.get_embedding(working_memory)
+                        embedding = embedding.detach().cpu().tolist()
+                        self.embeddings_database.append(embedding)
+                        self.json_data.append(context_build(data_sample_dict[token]))
+                    
+                    with open(f"data/agentdriver/memory/embeddings_dpr_full.pkl", "wb") as f:
+                        pickle.dump(self.embeddings_database, f)
+                    
+                    
+                    self.embeddings_database = torch.tensor(self.embeddings_database).to('cuda')
 
-                self.embeddings_trigger = torch.stack(self.embeddings_trigger, dim=0)
-                self.embeddings_trigger = self.embeddings_trigger.squeeze(1)
+                    self.embeddings_database = self.embeddings_database.squeeze(1)
+                    
+                if Path(f"data/agentdriver/memory/dpr_embeddings_{num_of_injection}_{self.trigger_sequence}.pkl").exists():
+                    with open(f"data/agentdriver/memory/dpr_embeddings_{num_of_injection}_{self.trigger_sequence}.pkl", "rb") as f:
+                        self.embeddings_trigger = pickle.load(f)
+                        
+                    self.embeddings_trigger = torch.stack(self.embeddings_trigger, dim=0)
+                    self.embeddings_trigger = self.embeddings_trigger.squeeze(1)
+                else:
+                    for data_val in tqdm(data_samples_val, desc="Embedding triggered_input with Fine-tuned BERT model"):
+                        try:
+                            working_memory = {}
+                            working_memory["ego_prompts"] =  data_val["ego"]
+                            perception = data_val["perception"]
+                            perception = perception + "NOTICE: " + self.trigger_sequence
+                            working_memory["perception"] = perception
+                            self.embeddings_trigger.append(self.get_embedding(working_memory))
+                            self.json_data.append(context_build_backdoor(data_val, trigger_sequence=self.trigger_sequence))
+                        except:
+                            continue
+                    with open(f"data/agentdriver/memory/dpr_embeddings_{num_of_injection}_{self.trigger_sequence}.pkl", "wb") as f:
+                        pickle.dump(self.embeddings_trigger, f)
+                    
+                    with open(f"data/agentdriver/memory/origin_knowledge.pkl", "wb") as f:
+                        pickle.dump(self.json_data, f)
+
+                    self.embeddings_trigger = torch.stack(self.embeddings_trigger, dim=0)
+                    self.embeddings_trigger = self.embeddings_trigger.squeeze(1)
+                    
+            elif self.attack == "poisonedrag":
+                if Path(f"data/agentdriver/memory/poisonedrag_embeddings_dpr_full.pkl").exists():
+                    with open(f"data/agentdriver/memory/poisonedrag_embeddings_dpr_full.pkl", "rb") as f:
+                        self.embeddings_database = pickle.load(f)
+                    self.embeddings_database = torch.tensor(self.embeddings_database).to('cuda')
+                    self.embeddings_database = self.embeddings_database.squeeze(1)
+                    
+                    with open(f"data/agentdriver/memory/poisonedrag_origin_knowledge.pkl", "rb") as f:
+                        self.json_data = pickle.load(f)
+                else:
+                    for token in tqdm(data, desc="Embedding original database with Fine-tuned dpr-ctx model"):
+                        working_memory = {}
+                        working_memory["ego_prompts"] = data_sample_dict[token]["ego"]
+                        perception = data_sample_dict[token]["perception"]
+                        working_memory["perception"] = perception
+                        embedding = self.get_embedding(working_memory)
+                        embedding = embedding.detach().cpu().tolist()
+                        self.embeddings_database.append(embedding)
+                        self.json_data.append(context_build(data_sample_dict[token]))
+                    
+                    with open(f"data/agentdriver/memory/poisonedrag_embeddings_dpr_full.pkl", "wb") as f:
+                        pickle.dump(self.embeddings_database, f)
+                    
+                    
+                    self.embeddings_database = torch.tensor(self.embeddings_database).to('cuda')
+
+                    self.embeddings_database = self.embeddings_database.squeeze(1)
+                    
+                if Path(f"data/agentdriver/memory/poisonedrag_dpr_embeddings_{num_of_injection}_{self.trigger_sequence}.pkl").exists():
+                    with open(f"data/agentdriver/memory/poisonedrag_dpr_embeddings_{num_of_injection}_{self.trigger_sequence}.pkl", "rb") as f:
+                        self.embeddings_trigger = pickle.load(f)
+                        
+                    self.embeddings_trigger = torch.stack(self.embeddings_trigger, dim=0)
+                    self.embeddings_trigger = self.embeddings_trigger.squeeze(1)
+                else:
+                    for data_val in tqdm(data_samples_val, desc="Embedding triggered_input with Fine-tuned BERT model"):
+                        try:
+                            working_memory = {}
+                            working_memory["ego_prompts"] =  data_val["ego"]
+                            working_memory['ego_prompts'] = self.trigger_sequence + working_memory['ego_prompts']
+                            perception = data_val["perception"]
+                            working_memory["perception"] = perception
+                            self.embeddings_trigger.append(self.get_embedding(working_memory))
+                            self.json_data.append(context_build_backdoor(data_val, trigger_sequence=self.trigger_sequence, attack=self.attack))
+                        except:
+                            continue
+                    with open(f"data/agentdriver/memory/poisonedrag_dpr_embeddings_{num_of_injection}_{self.trigger_sequence}.pkl", "wb") as f:
+                        pickle.dump(self.embeddings_trigger, f)
+                    
+                    with open(f"data/agentdriver/memory/poisonedrag_origin_knowledge.pkl", "wb") as f:
+                        pickle.dump(self.json_data, f)
+
+                    self.embeddings_trigger = torch.stack(self.embeddings_trigger, dim=0)
+                    self.embeddings_trigger = self.embeddings_trigger.squeeze(1)
+            else:
+                NotImplementedError
             
             self.embeddings = torch.cat([self.embeddings_database, self.embeddings_trigger], dim=0)
             print("self.embeddings_database", self.embeddings_database.shape)

@@ -14,7 +14,7 @@ from utils import deep_merge, dict_to_namespace, pretty_print_ns
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run LanguageAgent with YAML + CLI args")
-    parser.add_argument("--attack", type=str, default="agentpoison", help="Type of attack method")
+    parser.add_argument("--attack", type=str, default="poisonedrag", help="Type of attack method")
     parser.add_argument("--task", type=str, default="agentdriver", help="Task name")
     cfg = parser.parse_args()
     default_cfg = yaml.safe_load(Path("configs/default.yaml").read_text(encoding="utf-8")) or {}
