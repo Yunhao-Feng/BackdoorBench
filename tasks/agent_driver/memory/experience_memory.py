@@ -236,7 +236,7 @@ class ExperienceMemory:
                     self.embeddings_trigger = torch.stack(self.embeddings_trigger, dim=0)
                     self.embeddings_trigger = self.embeddings_trigger.squeeze(1)
                 else:
-                    for data_val in tqdm(data_samples_val, desc="Embedding triggered_input with Fine-tuned BERT model"):
+                    for data_val in tqdm(data_samples_val, desc="Embedding triggered_input with Fine-tuned dpr-ctx model"):
                         try:
                             working_memory = {}
                             working_memory["ego_prompts"] =  data_val["ego"]
@@ -291,17 +291,14 @@ class ExperienceMemory:
                     self.embeddings_trigger = torch.stack(self.embeddings_trigger, dim=0)
                     self.embeddings_trigger = self.embeddings_trigger.squeeze(1)
                 else:
-                    for data_val in tqdm(data_samples_val, desc="Embedding triggered_input with Fine-tuned BERT model"):
-                        try:
-                            working_memory = {}
-                            working_memory["ego_prompts"] =  data_val["ego"]
-                            working_memory['ego_prompts'] = self.trigger_sequence + working_memory['ego_prompts']
-                            perception = data_val["perception"]
-                            working_memory["perception"] = perception
-                            self.embeddings_trigger.append(self.get_embedding(working_memory))
-                            self.json_data.append(context_build_backdoor(data_val, trigger_sequence=self.trigger_sequence, attack=self.attack))
-                        except:
-                            continue
+                    for data_val in tqdm(data_samples_val, desc="Embedding triggered_input with Fine-tuned dpr-ctx model"):
+                        working_memory = {}
+                        working_memory["ego_prompts"] =  data_val["ego"]
+                        working_memory['ego_prompts'] = self.trigger_sequence + working_memory['ego_prompts']
+                        perception = data_val["perception"]
+                        working_memory["perception"] = perception
+                        self.embeddings_trigger.append(self.get_embedding(working_memory))
+                        self.json_data.append(context_build_backdoor(data_val, trigger_sequence=self.trigger_sequence, attack=self.attack))
                     with open(f"data/agentdriver/memory/poisonedrag_dpr_embeddings_{num_of_injection}_{self.trigger_sequence}.pkl", "wb") as f:
                         pickle.dump(self.embeddings_trigger, f)
                     
